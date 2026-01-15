@@ -6,6 +6,7 @@ import '../../../../core/constants/game_constants.dart';
 import '../../../../core/services/leaderboard_service.dart';
 import '../../../../core/services/logger_service.dart';
 import '../../domain/models/tap_feedback.dart';
+import '../../domain/models/simulation_mode.dart';
 import 'game_state.dart';
 
 class GameCubit extends Cubit<GameState> {
@@ -15,14 +16,15 @@ class GameCubit extends Cubit<GameState> {
 
   DateTime? _lastUpdateTime;
   bool _scoreSaved = false;
+  final Random _random = Random();
   
   // Physics constants
-  // Gravity acceleration: 2000 px/s² (realistic for mobile game)
-  static const double gravity = 2000.0;
+  // Default gravity acceleration: 2000 px/s² (realistic for mobile game)
+  static const double defaultGravity = 2000.0;
   
-  // Restitution coefficient: 0.85 (energy loss on bounce, between 0.7-0.85)
+  // Default restitution coefficient: 0.85 (energy loss on bounce, between 0.7-0.85)
   // Higher values = less energy loss, ball bounces higher
-  static const double restitution = 0.85;
+  static const double defaultRestitution = 0.85;
   
   // Velocity threshold to stop bouncing (px/s)
   // When velocity is below this, ball stops bouncing to avoid infinite micro-bounces
@@ -39,11 +41,16 @@ class GameCubit extends Cubit<GameState> {
   
   bool _wasOnFloor = false;
 
-  void startGame() {
-    LoggerService.info('Game started');
+  void startGame({SimulationMode? mode}) {
+    LoggerService.info('Game started with mode: ${mode ?? state.simulationMode}');
     _wasOnFloor = false;
     _scoreSaved = false;
     _lastUpdateTime = DateTime.now();
+    
+    final simulationMode = mode ?? state.simulationMode;
+    final gravity = _getGravityForMode(simulationMode);
+    final bounceLevel = state.bounceLevel;
+    
     emit(
       state.copyWith(
         isPlaying: true,
@@ -55,8 +62,22 @@ class GameCubit extends Cubit<GameState> {
         score: 0,
         justBouncedFromFloor: false,
         tapFeedbacks: const [],
+        simulationMode: simulationMode,
+        gravity: gravity,
+        bounceLevel: bounceLevel,
       ),
     );
+  }
+
+  double _getGravityForMode(SimulationMode mode) {
+    switch (mode) {
+      case SimulationMode.classic:
+        return defaultGravity;
+      case SimulationMode.gravityLab:
+        return state.gravity;
+      case SimulationMode.chaosMode:
+        return defaultGravity;
+    }
   }
 
   void togglePause() {
@@ -120,22 +141,35 @@ class GameCubit extends Cubit<GameState> {
       final double distanceFromFloor = (floorY - ballScreenY).abs();
       
       const double floorProximityMultiplier = 0.3;
-      const double baseTapImpulse = 600.0;
-      const double maxTapImpulse = 1000.0;
+      double baseTapImpulse = 600.0;
+      double maxTapImpulse = 1000.0;
       const double horizontalImpulseRatio = 0.2;
       
+      if (state.simulationMode == SimulationMode.chaosMode) {
+        baseTapImpulse = 400.0 + _random.nextDouble() * 800.0;
+        maxTapImpulse = baseTapImpulse + 400.0;
+      }
+      
       final double floorProximity = (1.0 - (distanceFromFloor / (screenHeight * floorProximityMultiplier)).clamp(0.0, 1.0));
-      final double tapImpulse = baseTapImpulse + (floorProximity * (maxTapImpulse - baseTapImpulse));
+      double tapImpulse = baseTapImpulse + (floorProximity * (maxTapImpulse - baseTapImpulse));
+      
+      if (state.simulationMode == SimulationMode.chaosMode) {
+        tapImpulse += (_random.nextDouble() - 0.5) * 300.0;
+      }
       
       if (distance > 0) {
         final double normalizedX = -dx / distance;
         
-        final double impulseX = normalizedX * tapImpulse * horizontalImpulseRatio;
-        final double impulseY = -tapImpulse;
+        double impulseX = normalizedX * tapImpulse * horizontalImpulseRatio;
+        double impulseY = -tapImpulse;
+        
+        if (state.simulationMode == SimulationMode.chaosMode) {
+          impulseX += (_random.nextDouble() - 0.5) * 200.0;
+          impulseY += (_random.nextDouble() - 0.5) * 100.0;
+        }
 
-        final random = Random();
         final feedbackText = FeedbackConstants.feedbackTexts[
-          random.nextInt(FeedbackConstants.feedbackTexts.length)
+          _random.nextInt(FeedbackConstants.feedbackTexts.length)
         ];
         
         final newFeedback = TapFeedback(
@@ -191,7 +225,8 @@ class GameCubit extends Cubit<GameState> {
     double velocityY = state.velocityY;
 
     // Apply gravity acceleration: v = v0 + a * t
-    velocityY += gravity * dt;
+    final currentGravity = state.gravity;
+    velocityY += currentGravity * dt;
 
     // Update position using velocity: x = x0 + v * t
     ballX += velocityX * dt;
@@ -200,7 +235,14 @@ class GameCubit extends Cubit<GameState> {
     bool bouncedFromFloor = false;
     int newScore = state.score;
 
+    // Apply friction if enabled
+    if (state.frictionEnabled && !_wasOnFloor) {
+      const double frictionCoefficient = 0.98;
+      velocityX *= frictionCoefficient;
+    }
+    
     // Collision detection and response for walls (X-axis)
+    final restitution = state.bounceLevel;
     if (ballX < minX) {
       ballX = minX;
       velocityX = -velocityX * restitution;
@@ -232,7 +274,7 @@ class GameCubit extends Cubit<GameState> {
         
         _wasOnFloor = true;
       } else {
-        const double stoppedFriction = 0.95;
+        final double stoppedFriction = state.frictionEnabled ? 0.90 : 0.95;
         velocityY = 0;
         velocityX *= stoppedFriction;
         if (_wasOnFloor) {
@@ -268,6 +310,37 @@ class GameCubit extends Cubit<GameState> {
         .where((feedback) => feedback.id != feedbackId)
         .toList();
     emit(state.copyWith(tapFeedbacks: updatedFeedbacks));
+  }
+
+  void setSimulationMode(SimulationMode mode) {
+    LoggerService.info('Simulation mode changed to: ${mode.name}');
+    final gravity = _getGravityForMode(mode);
+    emit(state.copyWith(
+      simulationMode: mode,
+      gravity: gravity,
+    ));
+  }
+
+  void setGravity(double gravity) {
+    if (gravity < 500.0 || gravity > 5000.0) return;
+    LoggerService.debug('Gravity changed to: $gravity');
+    emit(state.copyWith(gravity: gravity));
+  }
+
+  void setFrictionEnabled(bool enabled) {
+    LoggerService.debug('Friction ${enabled ? 'enabled' : 'disabled'}');
+    emit(state.copyWith(frictionEnabled: enabled));
+  }
+
+  void setBounceLevel(double level) {
+    if (level < 0.1 || level > 1.0) return;
+    LoggerService.debug('Bounce level changed to: $level');
+    emit(state.copyWith(bounceLevel: level));
+  }
+
+  void resetSimulation() {
+    LoggerService.info('Simulation reset');
+    startGame();
   }
 
   @override

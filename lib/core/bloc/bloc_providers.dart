@@ -48,10 +48,10 @@ class BlocProviders {
       currentLocation =
           AppRouter.router.routerDelegate.currentConfiguration.uri.path;
       if (currentLocation.isEmpty) {
-        currentLocation = NavigationConstants.menu;
+        currentLocation = NavigationConstants.home;
       }
     } catch (_) {
-      currentLocation = NavigationConstants.menu;
+      currentLocation = NavigationConstants.home;
     }
 
     return MultiBlocProvider(

@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import '../../domain/models/tap_feedback.dart';
+import '../../domain/models/simulation_mode.dart';
 
 class GameState extends Equatable {
   final double ballX;
@@ -11,6 +12,10 @@ class GameState extends Equatable {
   final bool isPaused;
   final bool justBouncedFromFloor;
   final List<TapFeedback> tapFeedbacks;
+  final SimulationMode simulationMode;
+  final double gravity;
+  final bool frictionEnabled;
+  final double bounceLevel;
 
   const GameState({
     this.ballX = 0.5,
@@ -22,6 +27,10 @@ class GameState extends Equatable {
     this.isPaused = false,
     this.justBouncedFromFloor = false,
     this.tapFeedbacks = const [],
+    this.simulationMode = SimulationMode.classic,
+    this.gravity = 2000.0,
+    this.frictionEnabled = false,
+    this.bounceLevel = 0.85,
   });
 
   GameState copyWith({
@@ -34,6 +43,10 @@ class GameState extends Equatable {
     bool? isPaused,
     bool? justBouncedFromFloor,
     List<TapFeedback>? tapFeedbacks,
+    SimulationMode? simulationMode,
+    double? gravity,
+    bool? frictionEnabled,
+    double? bounceLevel,
   }) {
     return GameState(
       ballX: ballX ?? this.ballX,
@@ -45,6 +58,10 @@ class GameState extends Equatable {
       isPaused: isPaused ?? this.isPaused,
       justBouncedFromFloor: justBouncedFromFloor ?? this.justBouncedFromFloor,
       tapFeedbacks: tapFeedbacks ?? this.tapFeedbacks,
+      simulationMode: simulationMode ?? this.simulationMode,
+      gravity: gravity ?? this.gravity,
+      frictionEnabled: frictionEnabled ?? this.frictionEnabled,
+      bounceLevel: bounceLevel ?? this.bounceLevel,
     );
   }
 
@@ -59,5 +76,9 @@ class GameState extends Equatable {
     isPaused,
     justBouncedFromFloor,
     tapFeedbacks,
+    simulationMode,
+    gravity,
+    frictionEnabled,
+    bounceLevel,
   ];
 }

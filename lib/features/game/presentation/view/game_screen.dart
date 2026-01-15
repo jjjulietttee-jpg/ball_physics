@@ -14,6 +14,7 @@ import '../widgets/score_widget.dart';
 import '../widgets/pause_button_widget.dart';
 import '../widgets/pause_dialog_widget.dart';
 import '../widgets/tap_feedback_widget.dart';
+import '../widgets/control_panel_widget.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -25,6 +26,7 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Ticker? _ticker;
   GameCubit? _gameCubit;
+  bool _showControlPanel = false;
 
   @override
   void didChangeDependencies() {
@@ -113,7 +115,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             Future.delayed(const Duration(milliseconds: 100), () {
               if (mounted) {
                 cubit.stopGame();
-                context.go(NavigationConstants.menu);
+                context.go(NavigationConstants.home);
               }
             });
           },
@@ -182,6 +184,30 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       isPaused: state.isPaused,
                       onPressed: _handlePauseButton,
                     ),
+                    Positioned(
+                      bottom: 20,
+                      right: 20,
+                      child: FloatingActionButton(
+                        onPressed: () {
+                          setState(() {
+                            _showControlPanel = !_showControlPanel;
+                          });
+                        },
+                        backgroundColor: AppColors.primary,
+                        child: Icon(
+                          _showControlPanel ? Icons.close : Icons.tune,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    if (_showControlPanel)
+                      ControlPanelWidget(
+                        onClose: () {
+                          setState(() {
+                            _showControlPanel = false;
+                          });
+                        },
+                      ),
                   ],
                 ),
               ),
